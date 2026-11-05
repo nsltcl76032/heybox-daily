@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>小黑盒每日任务管理</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%20%220%22%20%22100%22%20%22100%22><text y=%22.9em%22 font-size=%2290%22>📦</text></svg>">
+  <style>
+    :root {
+      --bg-base: #0b0d13;
+      --bg-card: #131722;
+      --bg-card-hover: #181d2c;
+      --bg-input: #1a2030;
+      --border: #232b40;
+      --border-focus: #3b82f6;
+      --text: #e2e8f0;
+      --text-muted: #94a3b8;
+      --primary: #f97316;
+      --primary-hover: #ea580c;
+      --success: #10b981;
+      --success-bg: rgba(16, 185, 129, 0.12);
+      --warning: #f59e0b;
+      --warning-bg: rgba(245, 158, 11, 0.12);
+      --danger: #ef4444;
+      --danger-bg: rgba(239, 68, 68, 0.12);
+      --accent: #3b82f6;
+      --radius: 12px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: var(--bg-base);
+      color: var(--text);
+      line-height: 1.5;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Header */
+    header {
+      background: rgba(19, 23, 34, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 40;
+    }
+    .header-container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #fff;
+    }
+    .logo-icon {
+      background: linear-gradient(135deg, #f97316, #ef4444);
+      color: white;
+      width: 34px;
+      height: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      font-size: 18px;
+    }
+    .user-badge {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .user-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #2a334d;
+      object-fit: cover;
+      border: 1px solid var(--border);
+    }
+    .user-info {
+      display: flex;
+      flex-direction: column;
+      font-size: 0.85rem;
+    }
+    .user-name { font-weight: 600; color: #fff; }
+    .user-id { font-size: 0.75rem; color: var(--text-muted); }
+
+    /* Layout */
+    main {
+      flex: 1;
+      max-width: 1100px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 24px 20px 48px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 24px;
+    }
+    @media (max-width: 860px) {
+      .grid-2 { grid-template-columns: 1fr; }
+    }
+
+    /* Cards */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+    }
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .card-title {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 9px 18px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      text-decoration: none;
+    }
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .btn-primary {
+      background: var(--primary);
+      color: #fff;
+    }
+    .btn-primary:hover:not(:disabled) {
+      background: var(--primary-hover);
+    }
+    .btn-secondary {
+      background: var(--bg-input);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover:not(:disabled) {
+      background: var(--bg-card-hover);
+      border-color: #3b4764;
+    }
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 0.8rem;
+    }
+
+    /* Stats Grid */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .stat-card {
+      background: rgba(26, 32, 48, 0.5);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+    }
+    .stat-label { font-size: 0.8rem; color: var(--text-muted); }
+    .stat-value { font-size: 1.35rem; font-weight: 700; color: #fff; margin-top: 4px; }
+
+    /* Task List */
+    .task-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .task-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+    .task-name {
+      font-weight: 500;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 10px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      border-radius: 20px;
+    }
+    .badge-success {
+      color: var(--success);
+      background: var(--success-bg);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .badge-warning {
+      color: var(--warning);
+      background: var(--warning-bg);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    /* Form & Schedule Controls */
+    .form-group {
+      margin-bottom: 18px;
+    }
+    .form-label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    .form-input {
+      width: 100%;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .form-input:focus {
+      border-color: var(--border-focus);
+    }
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 48px;
+      height: 26px;
+    }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #2a334d;
+      transition: .3s;
+      border-radius: 26px;
+    }
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 20px;
+      width: 20px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .3s;
+      border-radius: 50%;
+    }
+    input:checked + .slider { background-color: var(--success); }
+    input:checked + .slider:before { transform: translateX(22px); }
+
+    .preset-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .chip {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      cursor: pointer;
+      color: var(--text-muted);
+      transition: all 0.15s;
+    }
+    .chip:hover {
+      color: var(--text);
+      border-color: var(--border-focus);
+    }
+
+    /* Logs Console */
+    .log-box {
+      background: #080a0f;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.8rem;
+      color: #cbd5e1;
+      height: 260px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .log-box::-webkit-scrollbar { width: 6px; }
+    .log-box::-webkit-scrollbar-thumb { background: #2a334d; border-radius: 3px; }
+
+    /* Modal */
+    .modal-backdrop {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(6px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+    .modal-backdrop.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .modal {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 28px;
+      width: 100%;
+      max-width: 440px;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+    }
+    .modal-title {
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 8px;
+    }
+    .modal-desc {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-bottom: 20px;
+    }
+
+    /* Toast */
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      padding: 12px 20px;
+      border-radius: 8px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      color: #fff;
+      font-size: 0.9rem;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+      z-index: 200;
+      opacity: 0;
+      transform: translateY(12px);
+      transition: all 0.25s ease;
+      pointer-events: none;
+    }
+    #toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    #toast.success { border-color: var(--success); }
+    #toast.error { border-color: var(--danger); }
+
+    .spinner {
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      border-top-color: #fff;
+      border-radius: 50%;
+      width: 14px;
+      height: 14px;
+      animation: spin 0.6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <div class="header-container">
+      <div class="logo">
+        <div class="logo-icon">📦</div>
+        <span>Heybox Daily Web</span>
+      </div>
+      <div class="user-badge" id="user-badge">
+        <img id="avatar" class="user-avatar" src="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%200%20100%20100%22><circle cx=%2250%22 cy=%2250%22 r=%2250%22 fill=%22%232a334d%22/></svg>" alt="avatar">
+        <div class="user-info">
+          <span class="user-name" id="nickname">未登录</span>
+          <span class="user-id" id="heybox-id">点击登录账号</span>
+        </div>
+        <button class="btn btn-secondary btn-sm" id="btn-login-modal">登录 / 切换</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main>
+    <div class="grid-2">
+      <!-- Left Column: Tasks & Status -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <span>📋</span> 今日任务与收益
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn btn-secondary btn-sm" id="btn-refresh" title="刷新状态">🔄 刷新</button>
+            <button class="btn btn-primary btn-sm" id="btn-run-tasks">⚡ 立即执行任务</button>
+          </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="stats-row">
+          <div class="stat-card">
+            <div class="stat-label">当前经验值 (Exp)</div>
+            <div class="stat-value" id="val-exp">--</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">小黑盒 H 币</div>
+            <div class="stat-value" id="val-coin">--</div>
+          </div>
+        </div>
+
+        <!-- Task Checklist -->
+        <div class="form-label" style="margin-bottom: 10px;">今日任务完成情况</div>
+        <div class="task-list" id="task-list">
+          <div class="task-item">
+            <span class="task-name">每日签到</span>
+            <span class="badge badge-warning" id="task-sign">未完成</span>
+          </div>
+          <div class="task-item">
+            <span class="task-name">分享帖子到微信/QQ</span>
+            <span class="badge badge-warning" id="task-1">未完成</span>
+          </div>
+          <div class="task-item">
+            <span class="task-name">分享游戏到微信/QQ</span>
+            <span class="badge badge-warning" id="task-19">未完成</span>
+          </div>
+          <div class="task-item">
+            <span class="task-name">分享游戏评价到微信/QQ</span>
+            <span class="badge badge-warning" id="task-31">未完成</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Scheduled Settings -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">
+            <span>⏰</span> 定时任务配置
+          </div>
+          <span class="badge badge-success" id="schedule-badge">运行中</span>
+        </div>
+
+        <div class="toggle-row">
+          <div>
+            <div style="font-weight: 600; font-size: 0.95rem;">启用每日定时执行</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted);">容器将按设定时间在后台自动执行任务</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="schedule-toggle" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">每天执行时间 (北京时间 CST)</label>
+          <input type="time" class="form-input" id="schedule-time" value="09:15">
+          <div class="preset-chips">
+            <span class="chip" onclick="setTimePreset('08:30')">08:30</span>
+            <span class="chip" onclick="setTimePreset('09:15')">09:15 (推荐)</span>
+            <span class="chip" onclick="setTimePreset('12:00')">12:00</span>
+            <span class="chip" onclick="setTimePreset('21:00')">21:00</span>
+          </div>
+        </div>
+
+        <div style="background: rgba(26, 32, 48, 0.4); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; margin-bottom: 20px; font-size: 0.82rem; color: var(--text-muted); display: flex; flex-direction: column; gap: 6px;">
+          <div><b>下次触发：</b><span id="txt-next-run" style="color: var(--text);">计算中…</span></div>
+          <div><b>上次执行：</b><span id="txt-last-run" style="color: var(--text);">暂无记录</span></div>
+          <div><b>上次状态：</b><span id="txt-last-status" style="color: var(--text);">--</span></div>
+        </div>
+
+        <button class="btn btn-primary" id="btn-save-schedule" style="width: 100%;">保存定时配置</button>
+      </div>
+    </div>
+
+    <!-- Execution Logs -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">
+          <span>📜</span> 运行记录与日志
+        </div>
+        <button class="btn btn-secondary btn-sm" id="btn-refresh-logs">刷新日志</button>
+      </div>
+      <div class="log-box" id="log-box">正在加载日志…</div>
+    </div>
+  </main>
+
+  <!-- Login Modal -->
+  <div class="modal-backdrop" id="login-modal">
+    <div class="modal">
+      <div class="modal-title">登录小黑盒账号</div>
+      <div class="modal-desc">通过手机短信验证码登录，生成原生设备令牌与 APP 凭证</div>
+
+      <div class="form-group">
+        <label class="form-label">手机号</label>
+        <div style="display: flex; gap: 8px;">
+          <input type="text" class="form-input" id="input-phone" placeholder="请输入手机号（国内默认 +86）">
+          <button class="btn btn-secondary" id="btn-send-sms" style="white-space: nowrap; min-width: 110px;">获取验证码</button>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">短信验证码</label>
+        <input type="text" class="form-input" id="input-code" placeholder="4 至 8 位数字验证码" maxlength="8">
+      </div>
+
+      <div style="display: flex; gap: 10px; margin-top: 24px;">
+        <button class="btn btn-secondary" id="btn-cancel-login" style="flex: 1;">取消</button>
+        <button class="btn btn-primary" id="btn-confirm-login" style="flex: 1;">确认登录</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast"></div>
+
+  <!-- Optional Tencent Captcha Script -->
+  <script src="https://ssl.captcha.qq.com/TCaptcha.js"></script>
+
+  <script>
+    // State
+    let countdownTimer = null;
+    let pendingCaptcha = null;
+
+    // Toast helper
+    function showToast(msg, type = 'info') {
+      const el = document.getElementById('toast');
+      el.textContent = msg;
+      el.className = `show ${type}`;
+      setTimeout(() => { el.className = ''; }, 3500);
+    }
+
+    // Modal controls
+    const loginModal = document.getElementById('login-modal');
+    document.getElementById('btn-login-modal').addEventListener('click', () => {
+      loginModal.classList.add('active');
+    });
+    document.getElementById('btn-cancel-login').addEventListener('click', () => {
+      loginModal.classList.remove('active');
+    });
+
+    function setTimePreset(time) {
+      document.getElementById('schedule-time').value = time;
+    }
+
+    // Load Status
+    async function loadStatus() {
+      try {
+        const res = await fetch('/api/status');
+        const data = await res.json();
+
+        if (!data.configured) {
+          document.getElementById('nickname').textContent = '未登录';
+          document.getElementById('heybox-id').textContent = '请先登录小黑盒账号';
+          document.getElementById('val-exp').textContent = '--';
+          document.getElementById('val-coin').textContent = '--';
+          loginModal.classList.add('active');
+          return;
+        }
+
+        if (data.profile) {
+          document.getElementById('nickname').textContent = data.profile.nickname || '小黑盒用户';
+          document.getElementById('heybox-id').textContent = `ID: ${data.profile.heybox_id}`;
+          if (data.profile.avatar) {
+            document.getElementById('avatar').src = data.profile.avatar;
+          }
+        }
+
+        if (data.status) {
+          document.getElementById('val-exp').textContent = data.status.exp ?? '--';
+          document.getElementById('val-coin').textContent = data.status.coin ?? '--';
+
+          const signBadge = document.getElementById('task-sign');
+          if (data.status.signed) {
+            signBadge.className = 'badge badge-success';
+            signBadge.textContent = '已完成';
+          } else {
+            signBadge.className = 'badge badge-warning';
+            signBadge.textContent = '未完成';
+          }
+
+          if (Array.isArray(data.status.tasks)) {
+            data.status.tasks.forEach(t => {
+              const el = document.getElementById(`task-${t.id}`);
+              if (el) {
+                el.className = t.finished ? 'badge badge-success' : 'badge badge-warning';
+                el.textContent = t.finished ? '已完成' : '未完成';
+              }
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load status:', err);
+      }
+    }
+
+    // Load Schedule
+    async function loadSchedule() {
+      try {
+        const res = await fetch('/api/schedule');
+        const data = await res.json();
+        
+        document.getElementById('schedule-toggle').checked = Boolean(data.enabled);
+        if (data.time) document.getElementById('schedule-time').value = data.time;
+        
+        const badge = document.getElementById('schedule-badge');
+        badge.className = data.enabled ? 'badge badge-success' : 'badge badge-warning';
+        badge.textContent = data.enabled ? '已开启' : '已暂停';
+
+        document.getElementById('txt-next-run').textContent = data.nextRun ? new Date(data.nextRun).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : '未设定';
+        document.getElementById('txt-last-run').textContent = data.lastRun ? new Date(data.lastRun).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : '暂无记录';
+        document.getElementById('txt-last-status').textContent = data.lastStatus || '正常待命';
+      } catch (err) {
+        console.error('Failed to load schedule:', err);
+      }
+    }
+
+    // Save Schedule
+    document.getElementById('btn-save-schedule').addEventListener('click', async () => {
+      const enabled = document.getElementById('schedule-toggle').checked;
+      const time = document.getElementById('schedule-time').value;
+
+      try {
+        const res = await fetch('/api/schedule', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled, time })
+        });
+        const data = await res.json();
+        if (data.success) {
+          showToast('定时任务配置已保存', 'success');
+          loadSchedule();
+        } else {
+          showToast(data.error || '保存失败', 'error');
+        }
+      } catch (err) {
+        showToast('请求失败: ' + err.message, 'error');
+      }
+    });
+
+    // Run Tasks Manually
+    document.getElementById('btn-run-tasks').addEventListener('click', async () => {
+      const btn = document.getElementById('btn-run-tasks');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> 正在执行…';
+
+      try {
+        const res = await fetch('/api/run', { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          showToast(data.resultMsg || '任务执行完成！', 'success');
+          await loadStatus();
+          await loadSchedule();
+          await loadLogs();
+        } else {
+          showToast(data.error || '执行出错', 'error');
+        }
+      } catch (err) {
+        showToast('网络错误: ' + err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '⚡ 立即执行任务';
+      }
+    });
+
+    // Refresh Status Button
+    document.getElementById('btn-refresh').addEventListener('click', async () => {
+      await loadStatus();
+      await loadSchedule();
+      showToast('状态已刷新', 'info');
+    });
+
+    // Load Logs
+    async function loadLogs() {
+      try {
+        const res = await fetch('/api/logs');
+        const data = await res.json();
+        const box = document.getElementById('log-box');
+        if (Array.isArray(data.logs) && data.logs.length > 0) {
+          box.textContent = data.logs.join('\n');
+          box.scrollTop = box.scrollHeight;
+        } else {
+          box.textContent = '暂无运行日志';
+        }
+      } catch (err) {
+        console.error('Failed to load logs:', err);
+      }
+    }
+    document.getElementById('btn-refresh-logs').addEventListener('click', loadLogs);
+
+    // Send SMS Code
+    document.getElementById('btn-send-sms').addEventListener('click', async () => {
+      const phone = document.getElementById('input-phone').value.trim();
+      if (!phone) return showToast('请输入手机号', 'error');
+
+      const btn = document.getElementById('btn-send-sms');
+      btn.disabled = true;
+      btn.textContent = '发送中…';
+
+      async function doSend(captchaProof) {
+        try {
+          const res = await fetch('/api/login/send-code', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone, ...(captchaProof || {}) })
+          });
+          const data = await res.json();
+
+          if (data.captchaRequired && window.TencentCaptcha && data.appId) {
+            showToast('正在打开人机滑块验证…', 'info');
+            const captcha = new TencentCaptcha(data.appId, (res) => {
+              if (res.ret === 0) {
+                doSend({ ticket: res.ticket, randstr: res.randstr });
+              } else {
+                btn.disabled = false;
+                btn.textContent = '获取验证码';
+                showToast('已取消人机验证', 'warning');
+              }
+            });
+            captcha.show();
+            return;
+          }
+
+          if (data.success) {
+            showToast(data.message, 'success');
+            let sec = 60;
+            btn.textContent = `${sec}s 重发`;
+            countdownTimer = setInterval(() => {
+              sec--;
+              if (sec <= 0) {
+                clearInterval(countdownTimer);
+                btn.disabled = false;
+                btn.textContent = '获取验证码';
+              } else {
+                btn.textContent = `${sec}s 重发`;
+              }
+            }, 1000);
+          } else {
+            showToast(data.error || data.message || '发送失败', 'error');
+            btn.disabled = false;
+            btn.textContent = '获取验证码';
+          }
+        } catch (err) {
+          showToast('发送异常: ' + err.message, 'error');
+          btn.disabled = false;
+          btn.textContent = '获取验证码';
+        }
+      }
+
+      await doSend();
+    });
+
+    // Confirm Login
+    document.getElementById('btn-confirm-login').addEventListener('click', async () => {
+      const phone = document.getElementById('input-phone').value.trim();
+      const code = document.getElementById('input-code').value.trim();
+
+      if (!phone) return showToast('请输入手机号', 'error');
+      if (!code) return showToast('请输入短信验证码', 'error');
+
+      const btn = document.getElementById('btn-confirm-login');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> 登录中…';
+
+      try {
+        const res = await fetch('/api/login/verify-code', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone, code })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          showToast('登录成功！已保存凭证', 'success');
+          loginModal.classList.remove('active');
+          document.getElementById('input-code').value = '';
+          if (countdownTimer) clearInterval(countdownTimer);
+          document.getElementById('btn-send-sms').disabled = false;
+          document.getElementById('btn-send-sms').textContent = '获取验证码';
+          await loadStatus();
+          await loadLogs();
+        } else {
+          showToast(data.error || '验证失败', 'error');
+        }
+      } catch (err) {
+        showToast('登录请求失败: ' + err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '确认登录';
+      }
+    });
+
+    // Init
+    loadStatus();
+    loadSchedule();
+    loadLogs();
+    // Auto poll logs & schedule every 30s
+    setInterval(loadLogs, 30000);
+    setInterval(loadSchedule, 60000);
+  </script>
+</body>
+</html>

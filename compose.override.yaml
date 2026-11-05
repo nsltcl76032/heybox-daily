@@ -1,0 +1,25 @@
+services:
+  web:
+    build:
+      context: ./webui
+      dockerfile: Dockerfile
+    image: heybox-daily-web:latest
+    container_name: heybox-daily-web
+    restart: unless-stopped
+    ports:
+      - "8620:8620"
+    volumes:
+      - ./private:/app/private
+      - ./state:/app/state
+    tmpfs:
+      - /tmp:exec,size=512m
+    mem_limit: 1g
+    cap_drop:
+      - ALL
+    cap_add:
+      - DAC_OVERRIDE
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - TZ=Asia/Shanghai
+      - PORT=8620
