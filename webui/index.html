@@ -109,10 +109,10 @@
 
     .grid-2 {
       display: grid;
-      grid-template-columns: 1.15fr 0.85fr;
+      grid-template-columns: 1.1fr 0.9fr;
       gap: 24px;
     }
-    @media (max-width: 860px) {
+    @media (max-width: 880px) {
       .grid-2 { grid-template-columns: 1fr; }
     }
 
@@ -175,6 +175,13 @@
     .btn-secondary:hover:not(:disabled) {
       background: var(--bg-card-hover);
       border-color: #3b4764;
+    }
+    .btn-success {
+      background: #059669;
+      color: #fff;
+    }
+    .btn-success:hover:not(:disabled) {
+      background: #047857;
     }
     .btn-sm {
       padding: 6px 12px;
@@ -240,7 +247,7 @@
 
     /* Form & Schedule Controls */
     .form-group {
-      margin-bottom: 18px;
+      margin-bottom: 16px;
     }
     .form-label {
       display: block;
@@ -267,9 +274,9 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 12px 0;
+      padding: 10px 0;
       border-bottom: 1px solid var(--border);
-      margin-bottom: 16px;
+      margin-bottom: 14px;
     }
     .switch {
       position: relative;
@@ -330,7 +337,7 @@
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
       font-size: 0.8rem;
       color: #cbd5e1;
-      height: 260px;
+      height: 240px;
       overflow-y: auto;
       white-space: pre-wrap;
       word-break: break-all;
@@ -401,6 +408,8 @@
     }
     #toast.success { border-color: var(--success); }
     #toast.error { border-color: var(--danger); }
+    #toast.warning { border-color: var(--warning); }
+    #toast.info { border-color: var(--accent); }
 
     .spinner {
       border: 2px solid rgba(255, 255, 255, 0.2);
@@ -411,6 +420,23 @@
       animation: spin 0.6s linear infinite;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    .input-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .toggle-visibility-btn {
+      position: absolute;
+      right: 10px;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 0.85rem;
+      padding: 4px;
+    }
+    .toggle-visibility-btn:hover { color: var(--text); }
   </style>
 </head>
 <body>
@@ -482,19 +508,20 @@
         </div>
       </div>
 
-      <!-- Right Column: Scheduled Settings -->
+      <!-- Right Column: Scheduled Settings & Push Notification -->
       <div class="card">
         <div class="card-header">
           <div class="card-title">
-            <span>⏰</span> 定时任务配置
+            <span>⏰</span> 定时任务与通知
           </div>
           <span class="badge badge-success" id="schedule-badge">运行中</span>
         </div>
 
+        <!-- Schedule Section -->
         <div class="toggle-row">
           <div>
-            <div style="font-weight: 600; font-size: 0.95rem;">启用每日定时执行</div>
-            <div style="font-size: 0.8rem; color: var(--text-muted);">容器将按设定时间在后台自动执行任务</div>
+            <div style="font-weight: 600; font-size: 0.95rem;">每日自动定时运行</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted);">容器将按设定时间在后台自动触发</div>
           </div>
           <label class="switch">
             <input type="checkbox" id="schedule-toggle" checked>
@@ -519,7 +546,34 @@
           <div><b>上次状态：</b><span id="txt-last-status" style="color: var(--text);">--</span></div>
         </div>
 
-        <button class="btn btn-primary" id="btn-save-schedule" style="width: 100%;">保存定时配置</button>
+        <!-- PushPlus Section -->
+        <div class="card-header" style="margin-top: 10px; margin-bottom: 14px; padding-bottom: 10px;">
+          <div class="card-title" style="font-size: 0.98rem;">
+            <span>💬</span> PushPlus 微信通知推送
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="pushplus-toggle">
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">PushPlus Token（用户令牌）</label>
+          <div class="input-wrapper">
+            <input type="password" class="form-input" id="input-push-token" placeholder="前往 www.pushplus.plus 获取一对一 Token">
+            <button type="button" class="toggle-visibility-btn" id="btn-toggle-token" title="显示/隐藏 Token">👁️</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">群组编码 Topic (选填)</label>
+          <input type="text" class="form-input" id="input-push-topic" placeholder="一对一推送留空；一对多群组填群组编码">
+        </div>
+
+        <div style="display: flex; gap: 10px; margin-top: 18px;">
+          <button class="btn btn-secondary" id="btn-test-push" style="flex: 1;">📢 测试微信推送</button>
+          <button class="btn btn-primary" id="btn-save-all-settings" style="flex: 1.2;">💾 保存全部设置</button>
+        </div>
       </div>
     </div>
 
@@ -570,7 +624,6 @@
   <script>
     // State
     let countdownTimer = null;
-    let pendingCaptcha = null;
 
     // Toast helper
     function showToast(msg, type = 'info') {
@@ -592,6 +645,16 @@
     function setTimePreset(time) {
       document.getElementById('schedule-time').value = time;
     }
+
+    // Toggle token visibility
+    document.getElementById('btn-toggle-token').addEventListener('click', () => {
+      const input = document.getElementById('input-push-token');
+      if (input.type === 'password') {
+        input.type = 'text';
+      } else {
+        input.type = 'password';
+      }
+    });
 
     // Load Status
     async function loadStatus() {
@@ -644,7 +707,7 @@
       }
     }
 
-    // Load Schedule
+    // Load Schedule & Push Settings
     async function loadSchedule() {
       try {
         const res = await fetch('/api/schedule');
@@ -660,31 +723,85 @@
         document.getElementById('txt-next-run').textContent = data.nextRun ? new Date(data.nextRun).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : '未设定';
         document.getElementById('txt-last-run').textContent = data.lastRun ? new Date(data.lastRun).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' }) : '暂无记录';
         document.getElementById('txt-last-status').textContent = data.lastStatus || '正常待命';
+
+        // PushPlus
+        if (data.pushplus) {
+          document.getElementById('pushplus-toggle').checked = Boolean(data.pushplus.enabled);
+          if (data.pushplus.token) document.getElementById('input-push-token').value = data.pushplus.token;
+          if (data.pushplus.topic) document.getElementById('input-push-topic').value = data.pushplus.topic;
+        }
       } catch (err) {
         console.error('Failed to load schedule:', err);
       }
     }
 
-    // Save Schedule
-    document.getElementById('btn-save-schedule').addEventListener('click', async () => {
+    // Save All Settings
+    document.getElementById('btn-save-all-settings').addEventListener('click', async () => {
       const enabled = document.getElementById('schedule-toggle').checked;
       const time = document.getElementById('schedule-time').value;
+
+      const pushEnabled = document.getElementById('pushplus-toggle').checked;
+      const pushToken = document.getElementById('input-push-token').value.trim();
+      const pushTopic = document.getElementById('input-push-topic').value.trim();
 
       try {
         const res = await fetch('/api/schedule', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ enabled, time })
+          body: JSON.stringify({
+            enabled,
+            time,
+            pushplus: {
+              enabled: pushEnabled,
+              token: pushToken,
+              topic: pushTopic
+            }
+          })
         });
         const data = await res.json();
         if (data.success) {
-          showToast('定时任务配置已保存', 'success');
+          showToast('定时任务与微信推送设置已成功保存', 'success');
           loadSchedule();
         } else {
           showToast(data.error || '保存失败', 'error');
         }
       } catch (err) {
         showToast('请求失败: ' + err.message, 'error');
+      }
+    });
+
+    // Test PushPlus Notification
+    document.getElementById('btn-test-push').addEventListener('click', async () => {
+      const token = document.getElementById('input-push-token').value.trim();
+      const topic = document.getElementById('input-push-topic').value.trim();
+
+      if (!token) {
+        return showToast('请先输入 PushPlus Token', 'warning');
+      }
+
+      const btn = document.getElementById('btn-test-push');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> 发送中…';
+
+      try {
+        const res = await fetch('/api/notify/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token, topic })
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          showToast(data.message || '测试推送发送成功！请查看微信', 'success');
+          loadLogs();
+        } else {
+          showToast(data.error || '推送失败', 'error');
+        }
+      } catch (err) {
+        showToast('请求异常: ' + err.message, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '📢 测试微信推送';
       }
     });
 
@@ -844,7 +961,6 @@
     loadStatus();
     loadSchedule();
     loadLogs();
-    // Auto poll logs & schedule every 30s
     setInterval(loadLogs, 30000);
     setInterval(loadSchedule, 60000);
   </script>

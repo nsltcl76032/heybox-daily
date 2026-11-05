@@ -1,9 +1,9 @@
 services:
   web:
     build:
-      context: ./webui
-      dockerfile: Dockerfile
-    image: heybox-daily-web:latest
+      context: .
+      dockerfile: webui/Dockerfile
+    image: ghcr.io/nsltcl76032/heybox-daily:webui
     container_name: heybox-daily-web
     restart: unless-stopped
     ports:

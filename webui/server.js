@@ -34,13 +34,25 @@ let schedule = {
   lastRun: null,
   lastStatus: null,
   lastRunDate: null,
+  pushplus: {
+    enabled: false,
+    token: '',
+    topic: ''
+  }
 };
 
 function loadSchedule() {
   try {
     if (fs.existsSync(SCHEDULE_FILE)) {
       const data = JSON.parse(fs.readFileSync(SCHEDULE_FILE, 'utf8'));
-      schedule = { ...schedule, ...data };
+      schedule = {
+        ...schedule,
+        ...data,
+        pushplus: {
+          ...schedule.pushplus,
+          ...(data.pushplus || {})
+        }
+      };
     }
   } catch (err) {
     console.error('Failed to load schedule.json:', err.message);
@@ -79,12 +91,10 @@ function computeNextRun() {
     runToday = false;
   }
 
-  // Create date object
   const targetYear = parseInt(parts.year, 10);
   const targetMonth = parseInt(parts.month, 10) - 1;
   const targetDay = parseInt(parts.day, 10) + (runToday ? 0 : 1);
 
-  // Approximate ISO string for Beijing
   const d = new Date(Date.UTC(targetYear, targetMonth, targetDay, h - 8, m, 0));
   return d.toISOString();
 }
@@ -96,10 +106,110 @@ function appendLog(line) {
   const entry = `[${ts}] ${line}`;
   console.log(entry);
   recentLogs.push(entry);
-  if (recentLogs.length > 200) recentLogs.shift();
+  if (recentLogs.length > 250) recentLogs.shift();
   try {
     fs.appendFileSync(CRON_LOG_FILE, entry + '\n', 'utf8');
   } catch {}
+}
+
+// PushPlus notification helper
+async function sendPushPlus({ token, topic, title, content }) {
+  if (!token) throw new Error('PushPlus Token 不能为空');
+
+  const payload = {
+    token,
+    title: String(title).slice(0, 100),
+    content,
+    template: 'markdown',
+    ...(topic ? { topic } : {})
+  };
+
+  const res = await fetch('https://www.pushplus.plus/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+
+  const data = await res.json();
+  if (data.code === 200) {
+    return { success: true, message: data.msg || '推送成功', data: data.data };
+  } else {
+    throw new Error(`PushPlus 接口错误 (${data.code}): ${data.msg || data.data}`);
+  }
+}
+
+// Push report after task run
+async function notifyTaskResult(summary, config, client, source, error = null) {
+  const token = schedule.pushplus?.token || process.env.PUSHPLUS_TOKEN;
+  if (!schedule.pushplus?.enabled || !token) return;
+
+  const beijingTime = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+  const nickname = config?.profile?.nickname || '小黑盒用户';
+  const heyboxId = config?.session?.heybox_id || '未知';
+
+  if (error) {
+    const title = `⚠️ 小黑盒每日任务执行失败 [${nickname}]`;
+    const content = [
+      `### ⚠️ 小黑盒每日任务异常报告`,
+      `- **账号**：${nickname} (ID: \`${heyboxId}\`)`,
+      `- **触发来源**：${source}`,
+      `- **发生时间**：${beijingTime}`,
+      `- **错误信息**：\`${error.message || error}\``,
+      `\n> 请前往 Web 管理控制台查看详细执行日志。`
+    ].join('\n\n');
+
+    try {
+      await sendPushPlus({ token, topic: schedule.pushplus?.topic, title, content });
+      appendLog(`[PushPlus] 任务失败异常告警已推送`);
+    } catch (pushErr) {
+      appendLog(`[PushPlus] 告警推送失败: ${pushErr.message}`);
+    }
+    return;
+  }
+
+  let statusSection = '';
+  try {
+    const { inspect } = await getModules();
+    const state = await inspect(client, heyboxId);
+    statusSection = [
+      `#### 📋 今日任务完成情况`,
+      `- **每日签到**：${state.signed ? '✅ 已完成' : '❌ 未完成'}`,
+      ...(state.tasks || [])
+        .filter(t => ['1', '19', '31'].includes(String(t.id)))
+        .map(t => {
+          const nameMap = { '1': '分享帖子', '19': '分享游戏', '31': '分享游戏评价' };
+          const fin = t.state === 'finish' || t.state === '1';
+          return `- **${nameMap[t.id] || t.title}**：${fin ? '✅ 已完成' : '❌ 未完成'}`;
+        }),
+      `\n#### 💰 当前资产总计`,
+      `- **经验值 (Exp)**：${state.exp}`,
+      `- **小黑盒 H币**：${state.coin}`
+    ].join('\n');
+  } catch (inspectErr) {
+    statusSection = `\n- 状态获取提示: ${inspectErr.message}`;
+  }
+
+  const expDeltaStr = summary?.expDelta !== undefined ? `${summary.expDelta >= 0 ? '+' : ''}${summary.expDelta}` : '0';
+  const coinDeltaStr = summary?.coinDelta !== undefined ? `${summary.coinDelta >= 0 ? '+' : ''}${summary.coinDelta}` : '0';
+
+  const title = `📦 小黑盒每日任务完成 [${nickname}]`;
+  const content = [
+    `### 📦 小黑盒每日任务报告`,
+    `- **账号昵称**：${nickname}`,
+    `- **盒友 ID**：\`${heyboxId}\``,
+    `- **触发来源**：${source}`,
+    `- **执行时间**：${beijingTime}`,
+    `- **本次收益**：经验 **${expDeltaStr}**，H币 **${coinDeltaStr}**`,
+    statusSection,
+    `\n> 提示：可在 Web 控制台调整定时任务或查阅完整控制台日志。`
+  ].join('\n\n');
+
+  try {
+    await sendPushPlus({ token, topic: schedule.pushplus?.topic, title, content });
+    appendLog(`[PushPlus] 每日任务执行结果推送成功`);
+  } catch (pushErr) {
+    appendLog(`[PushPlus] 结果推送失败: ${pushErr.message}`);
+  }
 }
 
 // In-memory pending login sessions
@@ -113,10 +223,13 @@ async function executeDailyTasks(source = 'manual') {
   isRunning = true;
   appendLog(`>>> 开始执行每日任务 [触发来源: ${source}]`);
 
+  let loadedConfig = null;
+  let client = null;
+
   try {
     const { loadConfig, HeyboxClient, runDaily } = await getModules();
-    const config = loadConfig();
-    const client = new HeyboxClient(config);
+    loadedConfig = loadConfig();
+    client = new HeyboxClient(loadedConfig);
 
     const logs = [];
     const logCollector = (msg) => {
@@ -124,7 +237,7 @@ async function executeDailyTasks(source = 'manual') {
       appendLog(msg);
     };
 
-    const summary = await runDaily(client, config.session.heybox_id, {
+    const summary = await runDaily(client, loadedConfig.session.heybox_id, {
       log: logCollector,
       onTask: (id, action) => {
         const nameMap = { '1': '分享帖子', '19': '分享游戏', '31': '分享游戏评价', sign: '每日签到' };
@@ -139,6 +252,9 @@ async function executeDailyTasks(source = 'manual') {
     schedule.lastStatus = resultMsg;
     saveSchedule();
 
+    // Trigger PushPlus notification on success
+    await notifyTaskResult(summary, loadedConfig, client, source, null);
+
     return { success: true, summary, logs, resultMsg };
   } catch (err) {
     const errorMsg = `任务执行失败: ${err.message}`;
@@ -146,6 +262,10 @@ async function executeDailyTasks(source = 'manual') {
     schedule.lastRun = new Date().toISOString();
     schedule.lastStatus = errorMsg;
     saveSchedule();
+
+    // Trigger PushPlus alert on failure
+    await notifyTaskResult(null, loadedConfig, client, source, err);
+
     throw err;
   } finally {
     isRunning = false;
@@ -383,7 +503,7 @@ const server = http.createServer(async (req, res) => {
       }
     }
 
-    // 5. API: Get Schedule Config
+    // 5. API: Get Schedule & Push Config
     if (method === 'GET' && pathname === '/api/schedule') {
       return sendJson(res, 200, {
         ...schedule,
@@ -391,7 +511,7 @@ const server = http.createServer(async (req, res) => {
       });
     }
 
-    // 6. API: Update Schedule Config
+    // 6. API: Update Schedule & Push Config
     if (method === 'POST' && pathname === '/api/schedule') {
       const body = await parseBody(req);
       if (typeof body.enabled === 'boolean') schedule.enabled = body.enabled;
@@ -402,8 +522,16 @@ const server = http.createServer(async (req, res) => {
       }
       if (body.cron) schedule.cron = body.cron;
 
+      if (body.pushplus && typeof body.pushplus === 'object') {
+        schedule.pushplus = {
+          enabled: Boolean(body.pushplus.enabled),
+          token: String(body.pushplus.token || '').trim(),
+          topic: String(body.pushplus.topic || '').trim()
+        };
+      }
+
       saveSchedule();
-      appendLog(`定时设置已更新: 启用=${schedule.enabled}, 执行时间=${schedule.time} (${schedule.cron})`);
+      appendLog(`设置已更新: 定时=${schedule.enabled} (${schedule.time}), PushPlus=${schedule.pushplus?.enabled ? '已开启' : '已关闭'}`);
 
       return sendJson(res, 200, {
         success: true,
@@ -414,7 +542,36 @@ const server = http.createServer(async (req, res) => {
       });
     }
 
-    // 7. API: Get Logs
+    // 7. API: Test PushPlus Notification
+    if (method === 'POST' && pathname === '/api/notify/test') {
+      const body = await parseBody(req);
+      const token = body.token || schedule.pushplus?.token || process.env.PUSHPLUS_TOKEN;
+      const topic = body.topic ?? schedule.pushplus?.topic ?? '';
+
+      if (!token) {
+        return sendJson(res, 400, { error: '请先填写 PushPlus Token' });
+      }
+
+      try {
+        const beijingTime = new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
+        const title = '🔔 小黑盒每日任务 - PushPlus 测试通知';
+        const content = [
+          '### 🔔 PushPlus 推送配置测试成功！',
+          '- **通知模块**：Heybox Daily Web 控制台',
+          '- **测试时间**：' + beijingTime,
+          '- **状态**：微信消息通道连通正常。后续每日任务完成或出现异常时，均会自动向您推送执行结果与收益明细。'
+        ].join('\n\n');
+
+        const result = await sendPushPlus({ token, topic, title, content });
+        appendLog(`[PushPlus] 测试推送发送成功`);
+        return sendJson(res, 200, { success: true, message: '测试消息发送成功，请前往微信查收！', data: result });
+      } catch (err) {
+        appendLog(`[PushPlus] 测试推送失败: ${err.message}`);
+        return sendJson(res, 400, { error: err.message });
+      }
+    }
+
+    // 8. API: Get Logs
     if (method === 'GET' && pathname === '/api/logs') {
       let fileLogs = [];
       try {
@@ -428,7 +585,7 @@ const server = http.createServer(async (req, res) => {
       });
     }
 
-    // 8. Serve Frontend (index.html)
+    // 9. Serve Frontend (index.html)
     if ((method === 'GET' || method === 'HEAD') && (pathname === '/' || pathname === '/index.html')) {
       const htmlPath = path.join(__dirname, 'index.html');
       if (fs.existsSync(htmlPath)) {
